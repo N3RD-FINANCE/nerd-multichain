@@ -12,7 +12,7 @@ interface IUpdateReward {
     function transferDevFee() external;
 }
 
-contract FeeDistributorProxy2 is Ownable, IBrainzVault {
+contract FeeDistributorProxy is Ownable, IBrainzVault {
     using SafeMath for uint256;
     IUpdateReward public vault;
     IUpdateReward public stakingPool;

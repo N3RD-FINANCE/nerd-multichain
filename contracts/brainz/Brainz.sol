@@ -1,9 +1,9 @@
 pragma solidity 0.6.12;
 
-import "./BasicBrainz.sol";
+import "./WithdrawnableBrainz.sol";
 
-// NerdToken with Governance.
-contract Brainz is BasicBrainz {
+// Brainz.
+contract Brainz is WithdrawnableBrainz {
     /**
      * @dev Sets the values for {name} and {symbol}, initializes {decimals} with
      * a default value of 18.
@@ -14,6 +14,7 @@ contract Brainz is BasicBrainz {
      * construction.
      */
     constructor(
-    ) public {
+        address _validator
+    ) public WithdrawnableBrainz(_validator) {
     }
 }

@@ -18,7 +18,6 @@ contract FeeApprover is Ownable {
     bool paused;
     mapping(address => bool) public noFeeList;
 
-    // NERD token is pausable
     function setPaused(bool _pause) public onlyOwner {
         paused = _pause;
     }
@@ -27,9 +26,11 @@ contract FeeApprover is Ownable {
         feePercentX100 = _feeMultiplier;
     }
 
-    //need to edit: vault, router, staking, distributor proxy, dev
-    function editNoFeeList(address _address, bool noFee) public onlyOwner {
-        _editNoFeeList(_address, noFee);
+    //need to edit: brainz, vault, router, staking, distributor proxy, dev
+    function editNoFeeList(address[] memory _addresses, bool noFee) public onlyOwner {
+        for(uint256 i = 0; i < _addresses.length; i++) {
+            _editNoFeeList(_addresses[i], noFee);
+        }
     }
 
     function _editNoFeeList(address _address, bool noFee) internal {
@@ -50,7 +51,7 @@ contract FeeApprover is Ownable {
         require(paused == false, "FEE APPROVER: Transfers Paused");
 
         if (noFeeList[sender] || noFeeList[recipient]) {
-            // Dont have a fee when nerdvault is sending, or infinite loop
+            // Dont have a fee when vault is sending, or infinite loop
             transferToFeeDistributorAmount = 0;
             transferToAmount = amount;
         } else {

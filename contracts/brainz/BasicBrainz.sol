@@ -11,7 +11,7 @@ import "../interfaces/IBasicBrainz.sol";
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract BasicBrainz is IBasicBrainz, Ownable, BasicERC20 {
+contract BasicBrainz is Ownable, BasicERC20 {
     using SafeMath for uint256;
     using Address for address;
 
@@ -28,11 +28,6 @@ contract BasicBrainz is IBasicBrainz, Ownable, BasicERC20 {
     function setFeeDistributor(address _feeDistributor) public onlyOwner {
         feeDistributor = _feeDistributor;
     }
-
-    function initPair(address _router, address _factory) external {
-        require(pairAddress == address(0), "BasicBrainz:: Pair already created");
-    } 
-
 
     function _transfer(
         address sender,

@@ -1,23 +1,21 @@
 pragma solidity 0.6.12;
 
-import "@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts-ethereum-package/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts-ethereum-package/contracts/utils/EnumerableSet.sol";
-import "@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
-import "./INerdBaseToken.sol";
-import "./IFeeApprover.sol";
-import "./INoFeeSimple.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "../interfaces/IBasicBrainz.sol";
+import "../interfaces/IFeeApprover.sol";
+import "../interfaces/INoFeeSimple.sol";
 
-// Nerd Vault distributes fees equally amongst staked pools
 // Have fun reading it. Hopefully it's bug-free. God bless.
 
-contract TimeLockNerdPool {
+contract TimeLockBrainzPool {
     using SafeMath for uint256;
     using Address for address;
 
-    uint256 public constant NERD_LOCKED_PERIOD_DAYS = 14; //10 weeks,
-    uint256 public constant NERD_RELEASE_TRUNK = 1 days; //releasable every week,
+    uint256 public constant BRAINZ_LOCKED_PERIOD_DAYS = 14; //10 weeks,
+    uint256 public constant BRAINZ_RELEASE_TRUNK = 1 days; //releasable every week,
 
     // Info of each user.
     struct UserInfo {
@@ -27,13 +25,13 @@ contract TimeLockNerdPool {
         uint256 rewardLocked;
         uint256 releaseTime;
         //
-        // We do some fancy math here. Basically, any point in time, the amount of NERDs
+        // We do some fancy math here. Basically, any point in time, the amount of Brainz
         // entitled to a user but is pending to be distributed is:
         //
-        //   pending reward = (user.amount * pool.accNerdPerShare) - user.rewardDebt
+        //   pending reward = (user.amount * pool.accBrainzPerShare) - user.rewardDebt
         //
         // Whenever a user deposits or withdraws  tokens to a pool. Here's what happens:
-        //   1. The pool's `accNerdPerShare` (and `lastRewardBlock`) gets updated.
+        //   1. The pool's `accBrainzPerShare` (and `lastRewardBlock`) gets updated.
         //   2. User receives the pending reward sent to his/her address.
         //   3. User's `amount` gets updated.
         //   4. User's `rewardDebt` gets updated.
@@ -49,7 +47,7 @@ contract TimeLockNerdPool {
 
     // Info of each pool.
     struct PoolInfo {
-        uint256 accNerdPerShare; // Accumulated NERDs per share, times 1e18. See below.
+        uint256 accBrainzPerShare; // Accumulated Brainz per share, times 1e18. See below.
         uint256 lockedPeriod; // liquidity locked period
         bool emergencyWithdrawable;
         uint256 rewardsInThisEpoch;
@@ -66,17 +64,14 @@ contract TimeLockNerdPool {
     // Info of each user that stakes  tokens.
     mapping(address => UserInfo) public userInfo;
 
-    // The NERD TOKEN!
-    INerdBaseTokenLGE public nerd = INerdBaseTokenLGE(
-        0x32C868F6318D6334B2250F323D914Bc2239E4EeE
-    );
-    address public nerdAddress;
+    // The Brainz TOKEN!
+    IBasicBrainz public brainz;
 
-    function getNerdReleaseStart(address _user) public view returns (uint256) {
+    function getBrainzReleaseStart(address _user) public view returns (uint256) {
         return userInfo[_user].depositTime;
     }
 
-    function getRemainingNerd(address _user) public view returns (uint256) {
+    function getRemainingBrainz(address _user) public view returns (uint256) {
         return userInfo[_user].amount;
     }
 
@@ -84,57 +79,57 @@ contract TimeLockNerdPool {
         return userInfo[_user].referenceAmount;
     }
 
-    function computeReleasableNerd(address _addr)
+    function computeReleasableBrainz(address _addr)
         public
         view
         returns (uint256)
     {
-        uint256 nerdReleaseStart = getNerdReleaseStart(_addr);
-        if (block.timestamp < nerdReleaseStart) {
+        uint256 brainzReleaseStart = getBrainzReleaseStart(_addr);
+        if (block.timestamp < brainzReleaseStart) {
             return 0;
         }
 
-        uint256 amountNerd = getReferenceAmount(_addr);
-        if (amountNerd == 0) return 0;
+        uint256 amountBrainz = getReferenceAmount(_addr);
+        if (amountBrainz == 0) return 0;
 
         uint256 totalReleasableTilNow = 0;
 
-        if (block.timestamp > nerdReleaseStart.add(poolInfo.lockedPeriod)) {
-            totalReleasableTilNow = amountNerd;
+        if (block.timestamp > brainzReleaseStart.add(poolInfo.lockedPeriod)) {
+            totalReleasableTilNow = amountBrainz;
         } else {
-            uint256 daysTilNow = daysSinceNerdReleaseTilNow(_addr);
+            uint256 daysTilNow = daysSinceBrainzReleaseTilNow(_addr);
 
             totalReleasableTilNow = daysTilNow
-                .mul(NERD_RELEASE_TRUNK)
-                .mul(amountNerd)
+                .mul(BRAINZ_RELEASE_TRUNK)
+                .mul(amountBrainz)
                 .div(poolInfo.lockedPeriod);
         }
-        if (totalReleasableTilNow > amountNerd) {
-            totalReleasableTilNow = amountNerd;
+        if (totalReleasableTilNow > amountBrainz) {
+            totalReleasableTilNow = amountBrainz;
         }
-        uint256 alreadyReleased = amountNerd.sub(getRemainingNerd(_addr));
+        uint256 alreadyReleased = amountBrainz.sub(getRemainingBrainz(_addr));
         if (totalReleasableTilNow > alreadyReleased) {
             return totalReleasableTilNow.sub(alreadyReleased);
         }
         return 0;
     }
 
-    function daysSinceNerdReleaseTilNow(address _addr)
+    function daysSinceBrainzReleaseTilNow(address _addr)
         public
         view
         returns (uint256)
     {
-        uint256 nerdReleaseStart = getNerdReleaseStart(_addr);
-        if (nerdReleaseStart == 0 || block.timestamp < nerdReleaseStart)
+        uint256 brainzReleaseStart = getBrainzReleaseStart(_addr);
+        if (brainzReleaseStart == 0 || block.timestamp < brainzReleaseStart)
             return 0;
-        uint256 timeTillNow = block.timestamp.sub(nerdReleaseStart);
-        uint256 daysTilNow = timeTillNow.div(NERD_RELEASE_TRUNK);
+        uint256 timeTillNow = block.timestamp.sub(brainzReleaseStart);
+        uint256 daysTilNow = timeTillNow.div(BRAINZ_RELEASE_TRUNK);
         daysTilNow = daysTilNow.add(1);
         return daysTilNow;
     }
 }
 
-contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
+contract StakingPool is Ownable, TimeLockBrainzPool {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -153,11 +148,11 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
 
     // Sets the dev fee for this contract
     // defaults at 7.24%
-    // Note contract owner is meant to be a governance contract allowing NERD governance consensus
+    // Note contract owner is meant to be a governance contract allowing Brainz governance consensus
     uint16 DEV_FEE;
 
     uint256 public pending_DEV_rewards;
-    uint256 public nerdBalance;
+    uint256 public BrainzBalance;
     uint256 public pendingDeposit;
 
     // Returns fees generated since start of this contract
@@ -169,7 +164,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         averagePerBlock = poolInfo
             .cumulativeRewardsSinceStart
             .add(poolInfo.rewardsInThisEpoch)
-            .add(pendingNerdForPool())
+            .add(pendingBrainzForPool())
             .div(block.number.sub(poolInfo.startBlock));
     }
 
@@ -181,7 +176,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
     {
         averagePerBlock = poolInfo
             .rewardsInThisEpoch
-            .add(pendingNerdForPool())
+            .add(pendingBrainzForPool())
             .div(block.number.sub(poolInfo.epochCalculationStartBlock));
     }
 
@@ -189,7 +184,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         return poolInfo.epochRewards[_epoch];
     }
 
-    function nerdDeposit() public view returns (uint256) {
+    function brainzDeposit() public view returns (uint256) {
         return poolInfo.totalDeposit.add(pendingDeposit);
     }
 
@@ -219,23 +214,17 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         uint256 value
     );
 
-    function initialize() public initializer {
-        OwnableUpgradeSafe.__Ownable_init();
-        nerd = INerdBaseTokenLGE(0x32C868F6318D6334B2250F323D914Bc2239E4EeE);
-        require(
-            INoFeeSimple(nerd.transferCheckerAddress()).noFeeList(
-                address(this)
-            ),
-            "!Staking pool should not have fee"
-        );
-        poolInfo.lockedPeriod = NERD_LOCKED_PERIOD_DAYS.mul(NERD_RELEASE_TRUNK);
+    constructor(address _brainz, address _dev) public {
+        brainz = IBasicBrainz(_brainz);
+
+        poolInfo.lockedPeriod = BRAINZ_LOCKED_PERIOD_DAYS.mul(BRAINZ_RELEASE_TRUNK);
         DEV_FEE = 724;
-        devaddr = nerd.devFundAddress();
+        devaddr = _dev;
         tentativeDevAddress = address(0);
         contractStartBlock = block.number;
 
         poolInfo.emergencyWithdrawable = false;
-        poolInfo.accNerdPerShare = 0;
+        poolInfo.accBrainzPerShare = 0;
         poolInfo.rewardsInThisEpoch = 0;
         poolInfo.cumulativeRewardsSinceStart = 0;
         poolInfo.startBlock = block.number;
@@ -244,8 +233,8 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
     }
 
     function isMultipleOfWeek(uint256 _period) public pure returns (bool) {
-        uint256 numWeeks = _period.div(NERD_RELEASE_TRUNK);
-        return (_period == numWeeks.mul(NERD_RELEASE_TRUNK));
+        uint256 numWeeks = _period.div(BRAINZ_RELEASE_TRUNK);
+        return (_period == numWeeks.mul(BRAINZ_RELEASE_TRUNK));
     }
 
     function getDepositTime(address _addr) public view returns (uint256) {
@@ -261,14 +250,14 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         DEV_FEE = _DEV_FEE;
     }
 
-    function pendingNerdForPool() public view returns (uint256) {
+    function pendingBrainzForPool() public view returns (uint256) {
         uint256 tokenSupply = poolInfo.totalDeposit;
 
         if (tokenSupply == 0) return 0;
 
-        uint256 nerdRewardWhole = pendingRewards;
-        uint256 nerdRewardFee = nerdRewardWhole.mul(DEV_FEE).div(10000);
-        return nerdRewardWhole.sub(nerdRewardFee);
+        uint256 brainzRewardWhole = pendingRewards;
+        uint256 brainzRewardFee = brainzRewardWhole.mul(DEV_FEE).div(10000);
+        return brainzRewardWhole.sub(brainzRewardFee);
     }
 
     function computeDepositAmount(
@@ -276,27 +265,27 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         address _recipient,
         uint256 _amount
     ) internal returns (uint256) {
-        (uint256 _receiveAmount, ) = IFeeApprover(nerd.transferCheckerAddress())
+        (uint256 _receiveAmount, ) = IFeeApprover(brainz.transferCheckerAddress())
             .calculateAmountsAfterFee(_sender, _recipient, _amount);
         return _receiveAmount;
     }
 
-    // View function to see pending NERDs on frontend.
-    function pendingNerd(address _user) public view returns (uint256) {
+    // View function to see pending Brainz on frontend.
+    function pendingBrainz(address _user) public view returns (uint256) {
         UserInfo storage user = userInfo[_user];
-        uint256 accNerdPerShare = poolInfo.accNerdPerShare;
+        uint256 accBrainzPerShare = poolInfo.accBrainzPerShare;
         uint256 amount = user.amount;
 
         uint256 tokenSupply = poolInfo.totalDeposit;
 
         if (tokenSupply == 0) return 0;
 
-        uint256 nerdRewardFee = pendingRewards.mul(DEV_FEE).div(10000);
-        uint256 nerdRewardToDistribute = pendingRewards.sub(nerdRewardFee);
-        uint256 inc = nerdRewardToDistribute.mul(1e18).div(tokenSupply);
-        accNerdPerShare = accNerdPerShare.add(inc);
+        uint256 brainzRewardFee = pendingRewards.mul(DEV_FEE).div(10000);
+        uint256 brainzRewardToDistribute = pendingRewards.sub(brainzRewardFee);
+        uint256 inc = brainzRewardToDistribute.mul(1e18).div(tokenSupply);
+        accBrainzPerShare = accBrainzPerShare.add(inc);
 
-        return amount.mul(accNerdPerShare).div(1e18).sub(user.rewardDebt);
+        return amount.mul(accBrainzPerShare).div(1e18).sub(user.rewardDebt);
     }
 
     function getLockedReward(address _user) public view returns (uint256) {
@@ -310,41 +299,41 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
     }
 
     // ----
-    // Function that adds pending rewards, called by the NERD token.
+    // Function that adds pending rewards, called by the Brainz token.
     // ----
     function updatePendingRewards() public {
-        uint256 newRewards = nerd.balanceOf(address(this)).sub(nerdBalance).sub(
-            nerdDeposit()
+        uint256 newRewards = brainz.balanceOf(address(this)).sub(BrainzBalance).sub(
+            brainzDeposit()
         );
 
         if (newRewards > 0) {
-            nerdBalance = nerd.balanceOf(address(this)).sub(nerdDeposit()); // If there is no change the balance didn't change
+            BrainzBalance = brainz.balanceOf(address(this)).sub(brainzDeposit()); // If there is no change the balance didn't change
             pendingRewards = pendingRewards.add(newRewards);
         }
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function updatePool() internal returns (uint256 nerdRewardWhole) {
+    function updatePool() internal returns (uint256 brainzRewardWhole) {
         uint256 tokenSupply = poolInfo.totalDeposit;
         if (tokenSupply == 0) {
             // avoids division by 0 errors
             return 0;
         }
-        nerdRewardWhole = pendingRewards;
+        brainzRewardWhole = pendingRewards;
 
-        uint256 nerdRewardFee = nerdRewardWhole.mul(DEV_FEE).div(10000);
-        uint256 nerdRewardToDistribute = nerdRewardWhole.sub(nerdRewardFee);
+        uint256 brainzRewardFee = brainzRewardWhole.mul(DEV_FEE).div(10000);
+        uint256 brainzRewardToDistribute = brainzRewardWhole.sub(brainzRewardFee);
 
-        uint256 inc = nerdRewardToDistribute.mul(1e18).div(tokenSupply);
-        pending_DEV_rewards = pending_DEV_rewards.add(nerdRewardFee);
+        uint256 inc = brainzRewardToDistribute.mul(1e18).div(tokenSupply);
+        pending_DEV_rewards = pending_DEV_rewards.add(brainzRewardFee);
 
-        poolInfo.accNerdPerShare = poolInfo.accNerdPerShare.add(inc);
+        poolInfo.accBrainzPerShare = poolInfo.accBrainzPerShare.add(inc);
         poolInfo.rewardsInThisEpoch = poolInfo.rewardsInThisEpoch.add(
-            nerdRewardToDistribute
+            brainzRewardToDistribute
         );
     }
 
-    function withdrawNerd() public {
+    function withdrawBrainz() public {
         withdraw(0);
     }
 
@@ -365,7 +354,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
             _rewards = _rewards.add(lockedAmount);
         }
 
-        uint256 pending = pendingNerd(msg.sender);
+        uint256 pending = pendingBrainz(msg.sender);
         uint256 paid = pending.mul(REWARD_RELEASE_PERCENTAGE).div(100);
         uint256 _lockedReward = pending.sub(paid);
         if (_lockedReward > 0) {
@@ -375,7 +364,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         _rewards = _rewards.add(paid);
 
         uint256 lockedPeriod = poolInfo.lockedPeriod;
-        uint256 tobeReleased = computeReleasableNerd(msg.sender);
+        uint256 tobeReleased = computeReleasableBrainz(msg.sender);
         uint256 amountAfterDeposit = user.amount.add(_rewards);
         uint256 diffTime = tobeReleased.mul(lockedPeriod).div(
             amountAfterDeposit
@@ -385,12 +374,14 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         user.referenceAmount = amountAfterDeposit;
 
         user.amount = user.amount.add(_rewards);
-        user.rewardDebt = user.amount.mul(poolInfo.accNerdPerShare).div(1e18);
+        user.rewardDebt = user.amount.mul(poolInfo.accBrainzPerShare).div(1e18);
         poolInfo.totalDeposit = poolInfo.totalDeposit.add(_rewards);
+
+        transferDevFee();
         emit Restake(msg.sender, _rewards);
     }
 
-    // Deposit  tokens to NerdVault for NERD allocation.
+    // Deposit  tokens to BrainzVault for Brainz allocation.
     function deposit(uint256 _originAmount) public {
         UserInfo storage user = userInfo[msg.sender];
 
@@ -409,7 +400,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         //Transfer in the amounts from user
         // save gas
         if (_actualDepositReceive > 0) {
-            nerd.transferFrom(
+            brainz.transferFrom(
                 address(msg.sender),
                 address(this),
                 _originAmount
@@ -419,7 +410,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
             user.amount = user.amount.add(_actualDepositReceive);
         }
         //massUpdatePools();
-        user.rewardDebt = user.amount.mul(poolInfo.accNerdPerShare).div(1e18);
+        user.rewardDebt = user.amount.mul(poolInfo.accBrainzPerShare).div(1e18);
         poolInfo.totalDeposit = poolInfo.totalDeposit.add(
             _actualDepositReceive
         );
@@ -433,7 +424,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
             user.referenceAmount = _depositAmount;
         } else {
             uint256 lockedPeriod = poolInfo.lockedPeriod;
-            uint256 tobeReleased = computeReleasableNerd(_addr);
+            uint256 tobeReleased = computeReleasableBrainz(_addr);
             uint256 amountAfterDeposit = user.amount.add(_depositAmount);
             uint256 diffTime = tobeReleased.mul(lockedPeriod).div(
                 amountAfterDeposit
@@ -465,7 +456,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         );
         uint256 _actualDepositReceive = pendingDeposit;
         if (_actualDepositReceive > 0) {
-            nerd.transferFrom(
+            brainz.transferFrom(
                 address(msg.sender),
                 address(this),
                 _originAmount
@@ -475,7 +466,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
             user.amount = user.amount.add(_actualDepositReceive); // This is depositedFor address
         }
 
-        user.rewardDebt = user.amount.mul(poolInfo.accNerdPerShare).div(1e18); /// This is deposited for address
+        user.rewardDebt = user.amount.mul(poolInfo.accBrainzPerShare).div(1e18); /// This is deposited for address
         poolInfo.totalDeposit = poolInfo.totalDeposit.add(
             _actualDepositReceive
         );
@@ -484,15 +475,15 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
 
     function quitPool() public {
         require(
-            block.timestamp > getNerdReleaseStart(msg.sender),
+            block.timestamp > getBrainzReleaseStart(msg.sender),
             "cannot withdraw all lp tokens before"
         );
 
-        uint256 withdrawnableAmount = computeReleasableNerd(msg.sender);
+        uint256 withdrawnableAmount = computeReleasableBrainz(msg.sender);
         withdraw(withdrawnableAmount);
     }
 
-    // Withdraw  tokens from NerdVault.
+    // Withdraw  tokens from BrainzVault.
     function withdraw(uint256 _amount) public {
         _withdraw(_amount, msg.sender, msg.sender);
     }
@@ -505,17 +496,17 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
     ) internal {
         //require(pool.withdrawable, "Withdrawing from this pool is disabled");
         UserInfo storage user = userInfo[from];
-        require(computeReleasableNerd(from) >= _amount, "withdraw: not good");
+        require(computeReleasableBrainz(from) >= _amount, "withdraw: not good");
 
         massUpdatePools();
-        updateAndPayOutPending(from); // Update balances of from this is not withdrawal but claiming NERD farmed
+        updateAndPayOutPending(from); // Update balances of from this is not withdrawal but claiming Brainz farmed
 
         if (_amount > 0) {
             user.amount = user.amount.sub(_amount);
             poolInfo.totalDeposit = poolInfo.totalDeposit.sub(_amount);
-            safeNerdTransfer(address(to), _amount);
+            safeBrainzTransfer(address(to), _amount);
         }
-        user.rewardDebt = user.amount.mul(poolInfo.accNerdPerShare).div(1e18);
+        user.rewardDebt = user.amount.mul(poolInfo.accBrainzPerShare).div(1e18);
 
         emit Withdraw(to, _amount);
     }
@@ -529,11 +520,11 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
             //compute withdrawnable amount
             uint256 lockedAmount = user.rewardLocked;
             user.rewardLocked = 0;
-            safeNerdTransfer(from, lockedAmount);
+            safeBrainzTransfer(from, lockedAmount);
             user.releaseTime = block.timestamp.add(REWARD_LOCKED_PERIOD);
         }
 
-        uint256 pending = pendingNerd(from);
+        uint256 pending = pendingBrainz(from);
         uint256 paid = pending.mul(REWARD_RELEASE_PERCENTAGE).div(100);
         uint256 _lockedReward = pending.sub(paid);
         if (_lockedReward > 0) {
@@ -541,7 +532,7 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         }
 
         if (paid > 0) {
-            safeNerdTransfer(from, paid);
+            safeBrainzTransfer(from, paid);
         }
     }
 
@@ -553,24 +544,24 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
         UserInfo storage user = userInfo[msg.sender];
         poolInfo.totalDeposit = poolInfo.totalDeposit.sub(user.amount);
         uint256 withdrawnAmount = user.amount;
-        if (withdrawnAmount > nerd.balanceOf(address(this))) {
-            withdrawnAmount = nerd.balanceOf(address(this));
+        if (withdrawnAmount > brainz.balanceOf(address(this))) {
+            withdrawnAmount = brainz.balanceOf(address(this));
         }
-        safeNerdTransfer(address(msg.sender), withdrawnAmount);
+        safeBrainzTransfer(address(msg.sender), withdrawnAmount);
         emit EmergencyWithdraw(msg.sender, withdrawnAmount);
         user.amount = 0;
         user.rewardDebt = 0;
     }
 
-    function safeNerdTransfer(address _to, uint256 _amount) internal {
-        uint256 nerdBal = nerd.balanceOf(address(this));
+    function safeBrainzTransfer(address _to, uint256 _amount) internal {
+        uint256 BrainzBal = brainz.balanceOf(address(this));
 
-        if (_amount > nerdBal) {
-            nerd.transfer(_to, nerdBal);
-            nerdBalance = nerd.balanceOf(address(this)).sub(nerdDeposit());
+        if (_amount > BrainzBal) {
+            brainz.transfer(_to, BrainzBal);
+            BrainzBalance = brainz.balanceOf(address(this)).sub(brainzDeposit());
         } else {
-            nerd.transfer(_to, _amount);
-            nerdBalance = nerd.balanceOf(address(this)).sub(nerdDeposit());
+            brainz.transfer(_to, _amount);
+            BrainzBalance = brainz.balanceOf(address(this)).sub(brainzDeposit());
         }
         transferDevFee();
     }
@@ -578,26 +569,19 @@ contract StakingPool is OwnableUpgradeSafe, TimeLockNerdPool {
     function transferDevFee() public {
         if (pending_DEV_rewards == 0) return;
 
-        uint256 nerdBal = nerd.balanceOf(address(this));
-        if (pending_DEV_rewards > nerdBal) {
-            nerd.transfer(devaddr, nerdBal);
-            nerdBalance = nerd.balanceOf(address(this)).sub(nerdDeposit());
+        uint256 BrainzBal = brainz.balanceOf(address(this));
+        if (pending_DEV_rewards > BrainzBal) {
+            brainz.transfer(devaddr, BrainzBal);
+            BrainzBalance = brainz.balanceOf(address(this)).sub(brainzDeposit());
         } else {
-            nerd.transfer(devaddr, pending_DEV_rewards);
-            nerdBalance = nerd.balanceOf(address(this)).sub(nerdDeposit());
+            brainz.transfer(devaddr, pending_DEV_rewards);
+            BrainzBalance = brainz.balanceOf(address(this)).sub(brainzDeposit());
         }
 
         pending_DEV_rewards = 0;
     }
 
     function setDevFeeReciever(address _devaddr) public onlyOwner {
-        require(devaddr == msg.sender, "only dev can change");
-        tentativeDevAddress = _devaddr;
-    }
-
-    function confirmDevAddress() public {
-        require(tentativeDevAddress == msg.sender, "not tentativeDevAddress!");
-        devaddr = tentativeDevAddress;
-        tentativeDevAddress = address(0);
+        devaddr = _devaddr;
     }
 }
