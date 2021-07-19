@@ -73,7 +73,7 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
 
         executedMap[message] = true;
 
-        _mint(_recipient, _amount * 1e9);   //pegged 1:1e9
+        _mint(_recipient, _amount.mul(1e9));   //pegged 1:1e9
 
         emit Withdraw(_transitId, _recipient, _amount, chainId, _index, message);
     }
