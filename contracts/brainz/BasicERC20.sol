@@ -22,7 +22,7 @@ abstract contract BasicERC20 is Context, IBasicBrainz {
     string private _name;
     string private _symbol;
     uint8 private _decimals = 18;
-    uint256 public constant MAX_SUPPLY = (21e9)*1e18; //21B
+    uint256 public constant MAX_SUPPLY = (21000*1e6)*1e18; //21B
 
     uint256 public chainId;
     constructor() internal {

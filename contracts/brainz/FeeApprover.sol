@@ -10,7 +10,7 @@ contract FeeApprover is Ownable {
     using SafeMath for uint256;
 
     constructor() public {
-        feePercentX100 = 30;
+        feePercentX100 = 0;
         paused = false;
     }
 

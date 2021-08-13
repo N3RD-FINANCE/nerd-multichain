@@ -108,7 +108,7 @@ contract NerdBridge is Ownable, ReentrancyGuard {
             "NerdBridge::withdrawFromAny INVALID_SIGNATURE"
         );
 
-        TransferHelper.safeTransfer(nerd, _recipient, _amount.div(1e9));
+        TransferHelper.safeTransfer(nerd, _recipient, _amount.div(1e6));
 
         emit Withdraw(_paybackId, _recipient, _amount, _chainId, _index, message);
     }
