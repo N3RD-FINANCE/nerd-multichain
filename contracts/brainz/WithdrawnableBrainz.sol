@@ -12,7 +12,7 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
 
     event Payback(
         address indexed from,
-        uint256 indexed chainId,
+        uint256 indexed destChainId,
         uint256 amount,
         uint256 index
     );
@@ -38,19 +38,20 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
     }
 
     //burn brainz to receive nerd
-    function paybackTransit(uint256 _amount) external nonReentrant {
+    function paybackTransit(uint256 _amount, uint256 _destChainId) external nonReentrant {
         require(
             _amount > 0,
             "WithdrawnableBrainz::paybackTransit INVALID_AMOUNT"
         );
         _burn(msg.sender, _amount);
-        emit Payback(msg.sender, chainId, _amount, payBackIndex);
+        emit Payback(msg.sender, _destChainId, _amount, payBackIndex);
         payBackIndex++;
     }
 
     function withdrawTransitToken(
         bytes32 _transitId,
         address _recipient,
+        uint256 _sourceChainId,//should always be eth
         uint256 _amount,
         uint256 _index,
         bytes32 _r,
@@ -62,6 +63,7 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
                 _transitId,
                 _recipient,
                 _amount,
+                _sourceChainId,
                 chainId,
                 _index
             )
@@ -75,7 +77,7 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
 
         _mint(_recipient, _amount.mul(1e6));   //pegged 1:1e6
 
-        emit Withdraw(_transitId, _recipient, _amount, chainId, _index, message);
+        emit Withdraw(_transitId, _recipient, _amount, _sourceChainId, _index, message);
     }
 
     function _verify(
@@ -97,6 +99,17 @@ contract WithdrawnableBrainz is BasicBrainz, ReentrancyGuard {
         signHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", _msg)
         );
+    }
+
+    function recoverTest(
+        bytes32 _message,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
+    ) public view returns (address) {
+        bytes32 hash = _toEthBytes32SignedMessageHash(_message);
+        address signer = _recoverAddress(hash, _r, _s, _v);
+        return signer;
     }
 
     function _recoverAddress(

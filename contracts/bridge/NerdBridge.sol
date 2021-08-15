@@ -85,15 +85,23 @@ contract NerdBridge is Ownable, ReentrancyGuard {
     function withdrawFromAny(
         bytes32 _paybackId,
         address _recipient,
-        uint256 _chainId,
+        uint256 _sourceChainId,
         uint256 _amount,
         uint256 _index,
         bytes32 _r,
         bytes32 _s,
         uint8 _v
-    ) external nonReentrant onlyAllowedChainId(_chainId) {
+    ) external nonReentrant {
         bytes32 message = keccak256(
-            abi.encodePacked(_paybackId, _recipient, _amount, chainId, _index)
+            //              (tx id,       recipient,    amount,    source chain id,  target chain id, index)
+            abi.encodePacked(
+                _paybackId,
+                _recipient,
+                _amount,
+                _sourceChainId,
+                chainId,
+                _index
+            )
         );
         require(
             executedMap[message] == false,
@@ -110,7 +118,61 @@ contract NerdBridge is Ownable, ReentrancyGuard {
 
         TransferHelper.safeTransfer(nerd, _recipient, _amount.div(1e6));
 
-        emit Withdraw(_paybackId, _recipient, _amount, _chainId, _index, message);
+        emit Withdraw(
+            _paybackId,
+            _recipient,
+            _amount,
+            _sourceChainId,
+            _index,
+            message
+        );
+    }
+
+    function recoverValidator(
+        bytes32 _paybackId,
+        address _recipient,
+        uint256 _sourceChainId,
+        uint256 _amount,
+        uint256 _index,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
+    ) external view returns (address recovered, bytes32 signedHash) {
+        bytes32 message = keccak256(
+            //              (tx id,       recipient,    amount,    source chain id,  target chain id, index)
+            abi.encodePacked(
+                _paybackId,
+                _recipient,
+                _amount,
+                _sourceChainId,
+                chainId,
+                _index
+            )
+        );
+
+        signedHash = _toEthBytes32SignedMessageHash(message);
+        recovered = _recoverAddress(signedHash, _r, _s, _v);
+    }
+
+    function computeMessageHash(
+        bytes32 _paybackId,
+        address _recipient,
+        uint256 _sourceChainId,
+        uint256 _amount,
+        uint256 _index
+    ) external view returns (bytes32) {
+        return
+            keccak256(
+                //              (tx id,       recipient,    amount,    source chain id,  target chain id, index)
+                abi.encodePacked(
+                    _paybackId,
+                    _recipient,
+                    _amount,
+                    _sourceChainId,
+                    chainId,
+                    _index
+                )
+            );
     }
 
     function _verify(
@@ -122,6 +184,17 @@ contract NerdBridge is Ownable, ReentrancyGuard {
         bytes32 hash = _toEthBytes32SignedMessageHash(_message);
         address signer = _recoverAddress(hash, _r, _s, _v);
         return signer == validator;
+    }
+
+    function recoverTest(
+        bytes32 _message,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
+    ) public view returns (address) {
+        bytes32 hash = _toEthBytes32SignedMessageHash(_message);
+        address signer = _recoverAddress(hash, _r, _s, _v);
+        return signer;
     }
 
     function _toEthBytes32SignedMessageHash(bytes32 _msg)

@@ -43,6 +43,13 @@ module.exports = {
       skipDryRun: true
     },
   },
+  plugins: [
+    'truffle-plugin-verify'
+  ],
+  api_keys: {
+    etherscan: process.env.ETHERSCAN_KEY,
+    bscscan: process.env.BSCSCAN_KEY
+  },
   compilers: {
     solc: {
       version: "0.6.12",

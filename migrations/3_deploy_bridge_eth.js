@@ -22,7 +22,11 @@ module.exports = function (deployer, network, accounts) {
     }
     const nerdBridge = await deployer.deploy(NerdBridge, approver, nerdContractAddress)
     console.log('nerdBridge\'s address ', nerdBridge.address)
-
+    if (chainId != 1) {
+      await nerdBridge.setAllowedChains([97, 42], true)
+    } else {
+      await nerdBridge.setAllowedChains([56, 1], true)
+    }
     storage.address = nerdBridge.address
     storage.nerdaddress = nerdContractAddress
     fs.writeFileSync(`deployments/NerdBridge.${chainId}.address.json`,JSON.stringify(storage), 'utf-8');
